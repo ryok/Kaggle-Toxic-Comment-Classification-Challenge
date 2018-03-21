@@ -17,27 +17,34 @@ from matplotlib import pyplot
 max_features = 20000
 maxlen = 100
 
-
+# データセット読み込み
 train = pd.read_csv("./input/train.csv")
 test = pd.read_csv("./input/test.csv")
+
+# サンプリング（割合100%）
 train = train.sample(frac=1)
 
-list_sentences_train = train["comment_text"].fillna("CVxTz").values
+# 念のため、コメント部分のnullがある場合は特定の文字列に置換
+list_sentences_train = train["comment_text"].fillna("ryok").values
 list_classes = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
 y = train[list_classes].values
-list_sentences_test = test["comment_text"].fillna("CVxTz").values
+list_sentences_test = test["comment_text"].fillna("ryok").values
 
+# テストデータのサイズ（量）
 vocab_size = len(list_sentences_test)
 
-tokenizer = text.Tokenizer(num_words=max_features)
+# Tokenizerによる文字列の数値化
+tokenizer = text.Tokenizer(num_words=max_features) # データセット中の頻度上位num_wordsの単語に制限
 tokenizer.fit_on_texts(list(list_sentences_train))
 list_tokenized_train = tokenizer.texts_to_sequences(list_sentences_train)
 list_tokenized_test = tokenizer.texts_to_sequences(list_sentences_test)
+
+# maxlenにpaddingし、長さを揃える
 X_t = sequence.pad_sequences(list_tokenized_train, maxlen=maxlen)
 X_te = sequence.pad_sequences(list_tokenized_test, maxlen=maxlen)
 
 def get_model():
-    embed_size = 128
+    embed_size = 128 #embeddingのoutputサイズ
     inp = Input(shape=(maxlen, ))
     x = Embedding(max_features, embed_size)(inp)
     x = Bidirectional(LSTM(50, return_sequences=True))(x)
@@ -54,36 +61,19 @@ def get_model():
     return model
 
 
-def generator(data_x, data_y, batch_size=32):
-    n_batches = math.ceil(len(data_x) / batch_size)
-
-    while True:
-        for i in range(n_batches):
-            start = i * batch_size
-            end = (i + 1) * batch_size
-
-            data_x_mb = data_x[start:end]
-            data_y_mb = data_y[start:end]
-
-            data_x_mb = np.array(data_x_mb).astype('float32') / 255.
-            data_y_mb = pad_sequences(data_y_mb, dtype='int32', padding='post', value=w2i['<pad>'])
-            data_y_mb_oh = np.array([np_utils.to_categorical(datum_y, vocab_size) for datum_y in data_y_mb[:, 1:]])
-
-            yield [data_x_mb, data_y_mb], data_y_mb_oh
-
 model = get_model()
-batch_size = 32
-epochs = 2
+batch_size = 32 # バッチサイズ？なぜ
+epochs = 2 #エポック数
 
-
+# モデルの保存設定
 file_path="weights_base.best.hdf5"
 checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
-
+# 早期終了（最低ループ20回）
 early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
+callbacks_list = [checkpoint, early]
 
-
-callbacks_list = [checkpoint, early] #early
 try:
+    # 出力最後の20％を検証に利用
     history = model.fit(
         X_t, y,
         batch_size=batch_size,
@@ -100,10 +90,11 @@ pyplot.plot(history.history['val_loss'], label='test')
 pyplot.legend()
 pyplot.show()
 
-# make a prediction
+# テストデータに対して予測実施
 model.load_weights(file_path)
 y_test = model.predict(X_te)
 
+# 予測結果の出力
 sample_submission = pd.read_csv("./input/sample_submission.csv")
 sample_submission[list_classes] = y_test
 sample_submission.to_csv("baseline.csv", index=False)
