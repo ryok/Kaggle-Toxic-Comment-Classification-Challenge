@@ -3,7 +3,10 @@ import pandas as pd
 import math
 
 from subprocess import check_output
-print(check_output(["ls", "./input"]).decode("utf8"))
+#print(check_output(["ls", "./input"]).decode("utf8"))
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
 
 from keras.models import Model
 from keras.layers import Dense, Embedding, Input
@@ -12,6 +15,7 @@ from keras.preprocessing import text, sequence
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils import np_utils
+from keras.callbacks import Callback
 from matplotlib import pyplot
 
 max_features = 20000
@@ -57,8 +61,21 @@ def get_model():
     model.compile(loss='binary_crossentropy',
                   optimizer='adam',
                   metrics=['accuracy'])
-
     return model
+
+
+class RocAucEvaluation(Callback):
+    def __init__(self, validation_data=(), interval=1):
+        super(Callback, self).__init__()
+
+        self.interval = interval
+        self.X_val, self.y_val = validation_data
+
+    def on_epoch_end(self, epoch, logs={}):
+        if epoch % self.interval == 0:
+            y_pred = self.model.predict(self.X_val, verbose=0)
+            score = roc_auc_score(self.y_val, y_pred)
+            print("\n ROC-AUC - epoch: %d - score: %.6f \n" % (epoch+1, score))
 
 
 model = get_model()
@@ -70,23 +87,36 @@ file_path="weights_base.best.hdf5"
 checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
 # 早期終了（最低ループ20回）
 early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
-callbacks_list = [checkpoint, early]
+
+X_tra, X_val, y_tra, y_val = train_test_split(X_t, y, train_size=0.95, random_state=1)
+RocAuc = RocAucEvaluation(validation_data=(X_val, y_val), interval=1)
+callbacks_list = [checkpoint, early, RocAuc]
 
 try:
-    # 出力最後の20％を検証に利用
+    # 交差検定
     history = model.fit(
         X_t, y,
         batch_size=batch_size,
         epochs=epochs,
-        validation_split=0.2,
+        validation_data=(X_val, y_val),
+        #validation_split=0.2,
         callbacks=callbacks_list
     )
 except KeyboardInterrupt:
     pass
 
-# plot history
+print(history.history)
+
+
+# lossのプロット
 pyplot.plot(history.history['loss'], label='train')
 pyplot.plot(history.history['val_loss'], label='test')
+pyplot.legend()
+pyplot.show()
+
+# lossのプロット
+pyplot.plot(history.history['acc'], label='train')
+pyplot.plot(history.history['val_acc'], label='test')
 pyplot.legend()
 pyplot.show()
 
