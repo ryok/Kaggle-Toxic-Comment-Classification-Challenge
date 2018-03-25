@@ -18,84 +18,9 @@ from keras.utils import np_utils
 from keras.callbacks import Callback
 import matplotlib.pyplot as plt
 
-from keras import backend as K
-from keras.engine.topology import Layer
-from keras import initializers, regularizers, constraints
-
-
-class Attention(Layer):
-
-    def __init__(self, step_dim,
-                 W_regularizer=None, b_regularizer=None,
-                 W_constraint=None, b_constraint=None,
-                 bias=True, **kwargs):
-        self.supports_masking = True
-        self.init = initializers.get('glorot_uniform')
-
-        self.W_regularizer = regularizers.get(W_regularizer)
-        self.b_regularizer = regularizers.get(b_regularizer)
-
-        self.W_constraint = constraints.get(W_constraint)
-        self.b_constraint = constraints.get(b_constraint)
-
-        self.bias = bias
-        self.step_dim = step_dim
-        self.features_dim = 0
-        super(Attention, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        assert len(input_shape) == 3
-
-        self.W = self.add_weight((input_shape[-1],),
-                                 initializer=self.init,
-                                 name='{}_W'.format(self.name),
-                                 regularizer=self.W_regularizer,
-                                 constraint=self.W_constraint)
-        self.features_dim = input_shape[-1]
-
-        if self.bias:
-            self.b = self.add_weight((input_shape[1],),
-                                     initializer='zero',
-                                     name='{}_b'.format(self.name),
-                                     regularizer=self.b_regularizer,
-                                     constraint=self.b_constraint)
-        else:
-            self.b = None
-
-        self.built = True
-
-    def compute_mask(self, input, input_mask=None):
-        return None
-
-    def call(self, x, mask=None):
-        features_dim = self.features_dim
-        step_dim = self.step_dim
-
-        eij = K.reshape(K.dot(K.reshape(x, (-1, features_dim)),
-                        K.reshape(self.W, (features_dim, 1))), (-1, step_dim))
-
-        if self.bias:
-            eij += self.b
-
-        eij = K.tanh(eij)
-
-        a = K.exp(eij)
-
-        if mask is not None:
-            a *= K.cast(mask, K.floatx())
-
-        a /= K.cast(K.sum(a, axis=1, keepdims=True) + K.epsilon(), K.floatx())
-
-        a = K.expand_dims(a)
-        weighted_input = x * a
-        return K.sum(weighted_input, axis=1)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[0],  self.features_dim
-
-
+embed_size = 50
 max_features = 20000
-maxlen = 100
+maxlen = 200
 
 # データセット読み込み
 train = pd.read_csv("./input/train.csv")
@@ -123,15 +48,27 @@ list_tokenized_test = tokenizer.texts_to_sequences(list_sentences_test)
 X_t = sequence.pad_sequences(list_tokenized_train, maxlen=maxlen)
 X_te = sequence.pad_sequences(list_tokenized_test, maxlen=maxlen)
 
-def get_model():
-    embed_size = 128 #embeddingのoutputサイズ
-    inp = Input(shape=(maxlen, ))
-    x = Embedding(max_features, embed_size)(inp)
-    #_, *encoder_states = LSTM(embed_size, return_state=True)(x)
+def get_coefs(word,*arr): return word, np.asarray(arr, dtype='float32')
+embeddings_index = dict(get_coefs(*o.strip().split()) for o in open("./imput/glove.6B.50d.txt"))
 
-    x = Bidirectional(LSTM(60, return_sequences=True))(x)
-    x = Attention(maxlen)(x)
-    #x = GlobalMaxPool1D()(x)
+all_embs = np.stack(embeddings_index.values())
+emb_mean,emb_std = all_embs.mean(), all_embs.std()
+
+word_index = tokenizer.word_index
+nb_words = min(max_features, len(word_index))
+embedding_matrix = np.random.normal(emb_mean, emb_std, (nb_words, embed_size))
+for word, i in word_index.items():
+    if i >= max_features: continue
+    embedding_vector = embeddings_index.get(word)
+    if embedding_vector is not None: embedding_matrix[i] = embedding_vector
+
+
+def get_model():
+    embed_size = 128 # embeddingのoutputサイズ
+    inp = Input(shape=(maxlen, ))
+    x = Embedding(max_features, embed_size, weights=[embedding_matrix])(inp)
+    x = Bidirectional(LSTM(50, return_sequences=True, name='bidirectional_lstm_layer'))(x)
+    x = GlobalMaxPool1D()(x)
     x = Dropout(0.1)(x)
     x = Dense(50, activation="relu")(x)
     x = Dropout(0.1)(x)
@@ -142,7 +79,6 @@ def get_model():
                   metrics=['accuracy'])
     print(model.summary())
     return model
-
 
 class RocAucEvaluation(Callback):
     def __init__(self, validation_data=(), interval=1):
@@ -160,13 +96,13 @@ class RocAucEvaluation(Callback):
 
 model = get_model()
 batch_size = 32 # バッチサイズ？なぜ
-epochs = 10 #エポック数
+epochs = 2 #エポック数
 
 # モデルの保存設定
 file_path="weights_base.best.hdf5"
 checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
-# 早期終了（最低ループ20回）
-early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
+# 早期終了
+early = EarlyStopping(monitor="val_loss", mode="min", patience=3)
 
 #X_tra, X_val, y_tra, y_val = train_test_split(X_t, y, train_size=0.95, random_state=1)
 X_tra, X_test, y_tra, y_test = train_test_split(X_t, y, train_size=0.95, random_state=1)
@@ -192,7 +128,6 @@ score = model.evaluate(X_test, y_test,
 
 print('Test score:', score[0])
 print('Test accuracy:', score[1])
-
 
 # ----------------------------------------------
 # Some plots

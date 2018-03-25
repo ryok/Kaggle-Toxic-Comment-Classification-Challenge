@@ -1,4 +1,6 @@
 __pycache__/
 *.py[cod]
-# *.csv
+*.csv
+*.txt
+*.hdf5
 venv/
