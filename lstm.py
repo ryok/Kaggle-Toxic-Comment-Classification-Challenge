@@ -29,10 +29,10 @@ test = pd.read_csv("./input/test.csv")
 train = train.sample(frac=1)
 
 # 念のため、コメント部分のnullがある場合は特定の文字列に置換
-list_sentences_train = train["comment_text"].fillna("ryok").values
+list_sentences_train = train["comment_text"].fillna("unknown").values
 list_classes = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
 y = train[list_classes].values
-list_sentences_test = test["comment_text"].fillna("ryok").values
+list_sentences_test = test["comment_text"].fillna("unknown").values
 
 # テストデータのサイズ（量）
 vocab_size = len(list_sentences_test)
@@ -81,12 +81,12 @@ class RocAucEvaluation(Callback):
 
 model = get_model()
 batch_size = 32 # バッチサイズ
-epochs = 2 # エポック数
+epochs = 10 # エポック数
 
 # モデルの保存設定
 file_path="weights_base.best.hdf5"
 checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
-# 早期終了（最低ループ20回）
+# 早期終了
 early = EarlyStopping(monitor="val_loss", mode="min", patience=3)
 
 #X_tra, X_val, y_tra, y_val = train_test_split(X_t, y, train_size=0.95, random_state=1)
