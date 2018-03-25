@@ -16,7 +16,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils import np_utils
 from keras.callbacks import Callback
-from matplotlib import pyplot
+from matplotlib import plt
 
 from keras import backend as K
 from keras.engine.topology import Layer
@@ -127,9 +127,9 @@ def get_model():
     embed_size = 128 #embeddingのoutputサイズ
     inp = Input(shape=(maxlen, ))
     x = Embedding(max_features, embed_size)(inp)
-    _, *encoder_states = LSTM(embed_size, return_state=True)(x)
+    #_, *encoder_states = LSTM(embed_size, return_state=True)(x)
 
-    x = Bidirectional(LSTM(50, return_sequences=True))(x)
+    x = Bidirectional(LSTM(60, return_sequences=True))(x)
     x = Attention(maxlen)(x)
     #x = GlobalMaxPool1D()(x)
     #x = Dropout(0.1)(x)
@@ -140,6 +140,7 @@ def get_model():
     model.compile(loss='binary_crossentropy',
                   optimizer='adam',
                   metrics=['accuracy'])
+    print(model.summary())
     return model
 
 
@@ -159,7 +160,7 @@ class RocAucEvaluation(Callback):
 
 model = get_model()
 batch_size = 32 # バッチサイズ？なぜ
-epochs = 50 #エポック数
+epochs = 10 #エポック数
 
 # モデルの保存設定
 file_path="weights_base.best.hdf5"
@@ -167,43 +168,67 @@ checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best
 # 早期終了（最低ループ20回）
 early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
 
-X_tra, X_val, y_tra, y_val = train_test_split(X_t, y, train_size=0.95, random_state=1)
-RocAuc = RocAucEvaluation(validation_data=(X_val, y_val), interval=1)
-callbacks_list = [checkpoint, early, RocAuc]
+#X_tra, X_val, y_tra, y_val = train_test_split(X_t, y, train_size=0.95, random_state=1)
+X_tra, X_test, y_tra, y_test = train_test_split(X_t, y, train_size=0.95, random_state=1)
+#RocAuc = RocAucEvaluation(validation_data=(X_val, y_val), interval=1)
+callbacks_list = [checkpoint, early]
 
 try:
     # 交差検定
     history = model.fit(
-        X_t, y,
+        X_tra, y_tra,
         batch_size=batch_size,
         epochs=epochs,
-        validation_data=(X_val, y_val),
-        #validation_split=0.2,
+        #validation_data=(X_val, y_val),
+        validation_split=0.2,
         callbacks=callbacks_list
     )
 except KeyboardInterrupt:
     pass
 
-print(history.history)
+score = model.evaluate(X_test, y_test,
+                       verbose=0
+                       )
+
+print('Test score:', score[0])
+print('Test accuracy:', score[1])
 
 
-# lossのプロット
-pyplot.plot(history.history['loss'], label='train')
-pyplot.plot(history.history['val_loss'], label='test')
-pyplot.legend()
-pyplot.show()
+# ----------------------------------------------
+# Some plots
+# ----------------------------------------------
+fig, (axL, axR) = plt.subplots(ncols=2, figsize=(10,4))
 
-# lossのプロット
-pyplot.plot(history.history['acc'], label='train')
-pyplot.plot(history.history['val_acc'], label='test')
-pyplot.legend()
-pyplot.show()
+# loss
+def plot_history_loss(fit):
+    # Plot the loss in the history
+    axL.plot(fit.history['loss'],label="loss for training")
+    axL.plot(fit.history['val_loss'],label="loss for validation")
+    axL.set_title('model loss')
+    axL.set_xlabel('epoch')
+    axL.set_ylabel('loss')
+    axL.legend(loc='upper right')
+
+# acc
+def plot_history_acc(fit):
+    # Plot the loss in the history
+    axR.plot(fit.history['acc'],label="loss for training")
+    axR.plot(fit.history['val_acc'],label="loss for validation")
+    axR.set_title('model accuracy')
+    axR.set_xlabel('epoch')
+    axR.set_ylabel('accuracy')
+    axR.legend(loc='upper right')
+
+plot_history_loss(history)
+plot_history_acc(history)
+fig.savefig('./mnist-tutorial.png')
+plt.close()
 
 # テストデータに対して予測実施
-model.load_weights(file_path)
-y_test = model.predict(X_te)
+#model.load_weights(file_path)
+#y_test = model.predict(X_te)
 
 # 予測結果の出力
-sample_submission = pd.read_csv("./input/sample_submission.csv")
-sample_submission[list_classes] = y_test
-sample_submission.to_csv("baseline.csv", index=False)
+#sample_submission = pd.read_csv("./input/sample_submission.csv")
+#sample_submission[list_classes] = y_test
+#sample_submission.to_csv("baseline.csv", index=False)
