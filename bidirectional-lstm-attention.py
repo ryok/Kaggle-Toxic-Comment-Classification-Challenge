@@ -16,7 +16,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils import np_utils
 from keras.callbacks import Callback
-from matplotlib import plt
+import matplotlib.pyplot as plt
 
 from keras import backend as K
 from keras.engine.topology import Layer
