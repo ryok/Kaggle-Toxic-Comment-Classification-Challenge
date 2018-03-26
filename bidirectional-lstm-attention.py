@@ -95,7 +95,7 @@ class Attention(Layer):
 
 
 max_features = 20000
-maxlen = 100
+maxlen = 200
 
 # データセット読み込み
 train = pd.read_csv("./input/train.csv")
@@ -212,8 +212,8 @@ def plot_history_loss(fit):
 # acc
 def plot_history_acc(fit):
     # Plot the loss in the history
-    axR.plot(fit.history['acc'],label="loss for training")
-    axR.plot(fit.history['val_acc'],label="loss for validation")
+    axR.plot(fit.history['acc'],label="acc for training")
+    axR.plot(fit.history['val_acc'],label="acc for validation")
     axR.set_title('model accuracy')
     axR.set_xlabel('epoch')
     axR.set_ylabel('accuracy')
@@ -221,7 +221,7 @@ def plot_history_acc(fit):
 
 plot_history_loss(history)
 plot_history_acc(history)
-fig.savefig('./mnist-tutorial.png')
+fig.savefig('./pattern3.png')
 plt.close()
 
 # テストデータに対して予測実施

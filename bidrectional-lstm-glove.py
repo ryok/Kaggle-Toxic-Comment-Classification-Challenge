@@ -67,7 +67,7 @@ def get_model():
     embed_size = 128 # embeddingのoutputサイズ
     inp = Input(shape=(maxlen, ))
     x = Embedding(max_features, embed_size, weights=[embedding_matrix])(inp)
-    x = Bidirectional(LSTM(50, return_sequences=True, name='bidirectional_lstm_layer'))(x)
+    x = Bidirectional(LSTM(60, return_sequences=True, name='bidirectional_lstm_layer'))(x)
     x = GlobalMaxPool1D()(x)
     x = Dropout(0.1)(x)
     x = Dense(50, activation="relu")(x)
@@ -96,7 +96,7 @@ class RocAucEvaluation(Callback):
 
 model = get_model()
 batch_size = 32 # バッチサイズ？なぜ
-epochs = 2 #エポック数
+epochs = 10 #エポック数
 
 # モデルの保存設定
 file_path="weights_base.best.hdf5"
@@ -147,8 +147,8 @@ def plot_history_loss(fit):
 # acc
 def plot_history_acc(fit):
     # Plot the loss in the history
-    axR.plot(fit.history['acc'],label="loss for training")
-    axR.plot(fit.history['val_acc'],label="loss for validation")
+    axR.plot(fit.history['acc'],label="acc for training")
+    axR.plot(fit.history['val_acc'],label="acc for validation")
     axR.set_title('model accuracy')
     axR.set_xlabel('epoch')
     axR.set_ylabel('accuracy')
@@ -156,7 +156,7 @@ def plot_history_acc(fit):
 
 plot_history_loss(history)
 plot_history_acc(history)
-fig.savefig('./mnist-tutorial.png')
+fig.savefig('./pattern4.png')
 plt.close()
 
 # テストデータに対して予測実施
